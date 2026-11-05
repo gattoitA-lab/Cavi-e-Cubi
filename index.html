@@ -277,6 +277,45 @@ input[type=range]{accent-color:var(--blue);width:100%}
   .touch{padding:8px 10px}.joy{width:104px;height:104px}.tb{width:60px;height:60px;font-size:17px}
   .graph{height:60dvh}
 }
+/* Telefono e tablet: tocchi più comodi, niente zoom automatico di iOS, niente pull-to-refresh. */
+html{overscroll-behavior:none}
+body{overscroll-behavior-y:contain;-webkit-text-size-adjust:100%;touch-action:manipulation}
+button,.tab,.pal,.chip,.seg button,.it,.btn{-webkit-tap-highlight-color:transparent}
+@media (pointer:coarse){
+  .btn{padding:10px 15px}
+  .btn.sm{padding:8px 11px;font-size:13.5px}
+  .tab{padding:8px 16px}
+  .seg button{padding:8px 14px}
+  .pal{padding:8px 3px 7px}
+  .pal .ic{width:42px;height:42px}
+  .txt,select.txt,textarea.txt,.node .ps select,.node .ps input[type=text],.node .ps input[type=number],.cmd input{font-size:16px}
+  .ndpal .item,.mlist .it,.parts button,.chip{padding:9px 10px;font-size:14px}
+  .port .pin{width:22px;height:22px;top:0}
+  .port.in .pin{left:-12px}
+  .port.out .pin{right:-12px}
+  .node{width:212px}
+  .node .hd{padding:8px}
+  .node .hd .x{width:26px;height:26px}
+  .fr{width:66px}
+  .gl{grid-template-columns:repeat(3,1fr)}
+  .joy{width:118px;height:118px}
+  .tb{width:74px;height:74px}
+}
+@media (max-width:520px){
+  .top{gap:6px 10px;padding-bottom:8px}
+  .brand{font-size:19px;gap:8px}
+  .brand svg{width:32px;height:32px}
+  .btn{padding:8px 11px;font-size:14px}
+  .btn.sm{padding:6px 9px;font-size:12.5px}
+  .card{padding:9px;border-radius:14px}
+  .vpwrap{max-height:54dvh}
+  .dcv,.mprev{max-height:58dvh}
+  .graph{height:54dvh}
+  .hint{font-size:12px}
+  .scn,.nd,.drw,.mdl{gap:10px}
+  #cmdDock{padding-inline:6px}
+  .cmd{font-size:12.5px}
+}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -909,7 +948,7 @@ function commitFloat(){
 }
 function cloneCv(c){const n=document.createElement('canvas');n.width=c.width;n.height=c.height;n.getContext('2d').drawImage(c,0,0);return n}
 dCv.addEventListener('pointerdown',e=>{
-  if(!D.wc)return;e.preventDefault();dCv.setPointerCapture(e.pointerId);
+  if(!e.isPrimary)return;if(!D.wc)return;e.preventDefault();dCv.setPointerCapture(e.pointerId);
   const p=dpos(e),t=D.tool,c=D.wc.getContext('2d');
   D.last=p;D.drag={t};
   if(t==='select'){
@@ -953,6 +992,16 @@ function dEnd(){
 }
 dCv.addEventListener('pointerup',dEnd);dCv.addEventListener('pointercancel',dEnd);
 dCv.addEventListener('pointerleave',()=>{D.hover=null;drawD()});
+twoFinger(dCv,{
+  snapshot:()=>({zoom:D.zoom,sl:$('#dcvBox').scrollLeft,st:$('#dcvBox').scrollTop}),
+  onStart:()=>{D.drag=null;commitFloat()},
+  onMove:({scale,mx,my,start})=>{
+    const box=$('#dcvBox'),r=box.getBoundingClientRect(),z=clamp(Math.round(start.zoom*scale),2,32);
+    const wx=(start.mx0-r.left+start.sl)/start.zoom,wy=(start.my0-r.top+start.st)/start.zoom;
+    if(z!==D.zoom){D.zoom=z;D.zoomSet=true;dsize();drawD()}
+    box.scrollLeft=wx*z-(mx-r.left);box.scrollTop=wy*z-(my-r.top);
+  }
+});
 
 /* operazioni su selezione e fotogrammi */
 function dcopy(cut){
@@ -991,7 +1040,7 @@ function ddelete(){
   drawD();
 }
 function setColor(h){D.color=h;const i=$('#dColor');if(i)i.value=h;$$('#pgrid button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c.toLowerCase()===h.toLowerCase())))}
-function markTools(){$$('#drTools .pal').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===D.tool)));$('#drHint').textContent=(DTOOLS.find(x=>x[0]===D.tool)||[])[3]||''}
+function markTools(){$$('#drTools .pal').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.t===D.tool)));$('#drHint').textContent=((DTOOLS.find(x=>x[0]===D.tool)||[])[3]||'')+(COARSE?' Due dita: pizzica per lo zoom e trascina per spostarti.':'')}
 function setDTool(t){commitFloat();D.tool=t;if(t!=='select')D.sel=null;markTools();drawD()}
 
 /* barra superiore */
@@ -1270,6 +1319,7 @@ function ensureMR(){
     cvM.addEventListener('pointermove',e=>{if(!dr)return;MR.yaw-=(e.clientX-dr.x)*.01;MR.pitch=clamp(MR.pitch+(e.clientY-dr.y)*.01,-.2,1.4);dr={x:e.clientX,y:e.clientY}});
     cvM.addEventListener('pointerup',()=>{dr=null});cvM.addEventListener('pointercancel',()=>{dr=null});
     cvM.addEventListener('wheel',e=>{e.preventDefault();MR.dist=clamp(MR.dist*(1+Math.sign(e.deltaY)*.1),1.5,20)},{passive:false});
+    twoFinger(cvM,{snapshot:()=>({dist:MR.dist}),onStart:()=>{dr=null},onMove:({scale,start})=>{MR.dist=clamp(start.dist/scale,1.5,20)}});
     if(window.ResizeObserver)new ResizeObserver(()=>{const w=cvM.clientWidth,h=cvM.clientHeight;if(w&&h){r.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}}).observe($('#mPrev'));
     const loop=()=>{requestAnimationFrame(loop);if(UI.view!=='models')return;
       const c=MR.cam,d=MR.dist;c.position.set(Math.sin(MR.yaw)*Math.cos(MR.pitch)*d,MR.ty+Math.sin(MR.pitch)*d,Math.cos(MR.yaw)*Math.cos(MR.pitch)*d);c.lookAt(0,MR.ty,0);MR.r.render(MR.sc,c)};
@@ -1566,6 +1616,27 @@ function pasteClip(){
 }
 function dupSel(){const a=selActor();if(!a)return;UI.clip=JSON.parse(JSON.stringify(a));pasteClip()}
 
+/* ----- gesti touch: pizzica per lo zoom, due dita per spostare ----- */
+const COARSE=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||('ontouchstart' in window);
+function twoFinger(el,cfg){
+  const pts=new Map();let g=null;
+  const arr=()=>Array.from(pts.values());
+  el.addEventListener('pointerdown',e=>{
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2){if(cfg.onStart)cfg.onStart();const p=arr();
+      g=Object.assign({},cfg.snapshot(),{d0:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1,mx0:(p[0].x+p[1].x)/2,my0:(p[0].y+p[1].y)/2})}
+  });
+  el.addEventListener('pointermove',e=>{
+    if(!pts.has(e.pointerId))return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size<2||!g)return;
+    const p=arr(),d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1;
+    cfg.onMove({scale:d/g.d0,mx:(p[0].x+p[1].x)/2,my:(p[0].y+p[1].y)/2,start:g});
+  });
+  const end=e=>{if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);if(pts.size<2)g=null};
+  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
+}
+
 /* ----- interazione: 2D ----- */
 function hit2(wx,wy){
   const S=curScene();
@@ -1574,7 +1645,7 @@ function hit2(wx,wy){
   return null;
 }
 function pdown2(e){
-  const r=cvS2.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,{wx,wy}=s2w(px,py),S=curScene();
+  if(!e.isPrimary)return;const r=cvS2.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,{wx,wy}=s2w(px,py),S=curScene();
   cvS2.setPointerCapture(e.pointerId);
   const pan=e.button===1||e.button===2||UI.tool==='hand'||SE.space;
   if(pan){SE.drag={m:'pan',px,py,cx:SE.cam.x,cy:SE.cam.y};return}
@@ -1609,10 +1680,19 @@ cvS2.addEventListener('wheel',e=>{
   e.preventDefault();const r=cvS2.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,b=s2w(px,py);
   SE.cam.z=clamp(SE.cam.z*(1-Math.sign(e.deltaY)*.1),8,120);const a=s2w(px,py);SE.cam.x+=b.wx-a.wx;SE.cam.y+=b.wy-a.wy;
 },{passive:false});
+twoFinger(cvS2,{
+  snapshot:()=>({z:SE.cam.z,x:SE.cam.x,y:SE.cam.y}),
+  onStart:()=>{SE.drag=null},
+  onMove:({scale,mx,my,start})=>{
+    const r=cvS2.getBoundingClientRect(),z=clamp(start.z*scale,8,120);
+    const wx=start.x+(start.mx0-r.left-SE.cw/2)/start.z,wy=start.y-(start.my0-r.top-SE.ch/2)/start.z;
+    SE.cam.z=z;SE.cam.x=wx-(mx-r.left-SE.cw/2)/z;SE.cam.y=wy+(my-r.top-SE.ch/2)/z;
+  }
+});
 
 /* ----- interazione: 3D ----- */
 function pdown3(e){
-  if(!ensureE3())return;const S=curScene();cvS3.setPointerCapture(e.pointerId);
+  if(!e.isPrimary)return;if(!ensureE3())return;const S=curScene();cvS3.setPointerCapture(e.pointerId);
   const orbit=e.button===2||e.button===1||UI.tool==='hand';
   if(orbit){SE.drag={m:'orbit',x:e.clientX,y:e.clientY};return}
   if(UI.tool==='erase'){const h=pick3(e.clientX,e.clientY);if(h){UI.sel=h.id;deleteSel()}return}
@@ -1636,6 +1716,15 @@ function pup3(){SE.drag=null}
 cvS3.addEventListener('pointerdown',pdown3);cvS3.addEventListener('pointermove',pmove3);cvS3.addEventListener('pointerup',pup3);cvS3.addEventListener('pointercancel',pup3);cvS3.addEventListener('contextmenu',e=>e.preventDefault());
 cvS3.addEventListener('pointerleave',()=>{SE.hover3=null;if(E3.ok)updateGhost3()});
 cvS3.addEventListener('wheel',e=>{e.preventDefault();E3.dist=clamp(E3.dist*(1+Math.sign(e.deltaY)*.1),4,80)},{passive:false});
+twoFinger(cvS3,{
+  snapshot:()=>({dist:E3.dist,yaw:E3.yaw,pitch:E3.pitch}),
+  onStart:()=>{SE.drag=null},
+  onMove:({scale,mx,my,start})=>{
+    E3.dist=clamp(start.dist/scale,4,80);
+    E3.yaw=start.yaw-(mx-start.mx0)*.008;
+    E3.pitch=clamp(start.pitch+(my-start.my0)*.008,.05,1.5);
+  }
+});
 window.addEventListener('keydown',e=>{
   if(UI.view!=='scene')return;const tg=(e.target||{}).tagName||'';if(/INPUT|TEXTAREA|SELECT/.test(tg))return;
   const k=e.key.toLowerCase(),m=e.ctrlKey||e.metaKey;
@@ -1652,7 +1741,7 @@ window.addEventListener('keyup',e=>{if(e.key===' ')SE.space=false});
 function setTool(t){UI.tool=t;if(t!=='place')SE.place=SE.place;markBar();markLib();hintScene()}
 function hintScene(){
   const S=curScene(),h=$('#scHint');
-  const base=S.mode==='2d'?'Rotellina: zoom. Clic destro o Mano: sposta la vista. Trascina l\'angolo giallo per ridimensionare. ':'Clic destro o Mano: gira la vista. Rotellina: zoom. Maiusc + trascina: alza o abbassa l\'oggetto. ';
+  const base=S.mode==='2d'?(COARSE?'Un dito: sposta gli oggetti. Due dita: pizzica per lo zoom e trascina per spostare la vista. Trascina l\'angolo giallo per ridimensionare. ':'Rotellina: zoom. Clic destro o Mano: sposta la vista. Trascina l\'angolo giallo per ridimensionare. '):(COARSE?'Un dito: gira la vista. Due dita: pizzica per lo zoom. Tocca Mano per girare senza spostare oggetti. ':'Clic destro o Mano: gira la vista. Rotellina: zoom. Maiusc + trascina: alza o abbassa l\'oggetto. ');
   h.textContent=(UI.tool==='place'&&SE.place?'Clic sulla scena per mettere "'+SE.place.label+'". Esc per smettere. ':'')+base;
 }
 function renderScBar(){
